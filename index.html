@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raid Chronicles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ═══ SCREEN: MAIN MENU ═══ -->
+<div id="screen-menu" class="screen active">
+  <div class="menu-bg">
+    <div class="menu-particles" id="menu-particles"></div>
+    <div class="menu-content">
+      <div class="title-block">
+        <div class="title-emblem">⚔</div>
+        <h1 class="game-title">RAID<br><span class="title-accent">CHRONICLES</span></h1>
+        <p class="game-subtitle">Enter the eternal fight</p>
+      </div>
+      <div class="menu-buttons">
+        <button id="btn-new-game" class="btn-menu">⚔ &nbsp;NEW GAME</button>
+        <button id="btn-continue" class="btn-menu btn-menu-dim" id="btn-continue">◈ &nbsp;CONTINUE</button>
+      </div>
+      <div class="menu-version">v0.1 — Alpha</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: CHARACTER CREATION ═══ -->
+<div id="screen-char-create" class="screen">
+  <div class="create-bg">
+    <div class="create-container">
+      <h2 class="screen-title">CHOOSE YOUR PATH</h2>
+      <p class="screen-subtitle">One hero. Three roles. An eternal war.</p>
+      <div class="class-cards" id="class-cards"></div>
+      <div class="name-section">
+        <div class="name-label">YOUR NAME, CHAMPION</div>
+        <input type="text" id="char-name-input" class="name-input" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+        <button id="btn-begin" class="btn-primary" disabled>BEGIN YOUR JOURNEY ⚔</button>
+      </div>
+      <button class="btn-back" id="btn-back-to-menu">← Back to Menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: WORLD MAP ═══ -->
+<div id="screen-world" class="screen">
+  <div class="world-layout">
+    <div class="world-topbar">
+      <div class="char-pill" id="char-pill"></div>
+      <div class="world-nav">
+        <button class="nav-btn" data-modal="char">⚔ CHARACTER</button>
+        <button class="nav-btn" data-modal="inventory">🎒 BAGS</button>
+        <button class="nav-btn" data-modal="quests">📜 QUESTS</button>
+        <button class="nav-btn" data-modal="professions">⚒ CRAFT</button>
+      </div>
+    </div>
+    <div class="world-body">
+      <div class="boss-map-area">
+        <div class="map-title">THE ETERNAL KEEP</div>
+        <div class="boss-map" id="boss-map"></div>
+      </div>
+      <div class="world-sidebar">
+        <div class="quest-tracker-box">
+          <div class="tracker-title">ACTIVE QUESTS</div>
+          <div id="quest-tracker"></div>
+        </div>
+        <div class="power-box">
+          <div class="tracker-title">ITEM LEVEL</div>
+          <div id="power-display" class="power-number">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-char" class="modal hidden"><div class="modal-inner">
+    <button class="modal-close">✕</button>
+    <h3 class="modal-title">CHARACTER</h3>
+    <div id="char-sheet"></div>
+  </div></div>
+  <div id="modal-inventory" class="modal hidden"><div class="modal-inner modal-wide">
+    <button class="modal-close">✕</button>
+    <h3 class="modal-title">BAGS</h3>
+    <div id="inventory-panel"></div>
+  </div></div>
+  <div id="modal-quests" class="modal hidden"><div class="modal-inner modal-wide">
+    <button class="modal-close">✕</button>
+    <h3 class="modal-title">QUEST LOG</h3>
+    <div id="quest-log-panel"></div>
+  </div></div>
+  <div id="modal-professions" class="modal hidden"><div class="modal-inner">
+    <button class="modal-close">✕</button>
+    <h3 class="modal-title">PROFESSIONS</h3>
+    <div id="profession-panel"></div>
+  </div></div>
+</div>
+
+<!-- ═══ SCREEN: COMBAT ═══ -->
+<div id="screen-combat" class="screen">
+  <div class="combat-layout">
+
+    <!-- Boss Frame -->
+    <div class="boss-frame">
+      <div class="boss-info">
+        <div class="boss-name-tag" id="boss-name">—</div>
+        <div class="boss-level-tag" id="boss-level-tag">Level ??</div>
+      </div>
+      <div class="boss-hp-wrap">
+        <div class="boss-hp-bar" id="boss-hp-bar" style="width:100%"></div>
+        <span class="boss-hp-text" id="boss-hp-text">100%</span>
+      </div>
+      <div class="boss-debuffs" id="boss-debuffs"></div>
+      <div class="boss-cast-bar-wrap hidden" id="boss-cast-wrap">
+        <div class="boss-cast-label" id="boss-cast-label">Casting...</div>
+        <div class="boss-cast-bar" id="boss-cast-bar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Middle: Companions + Log -->
+    <div class="combat-middle">
+      <div class="companion-frames" id="companion-frames"></div>
+      <div class="combat-log-wrap">
+        <div class="combat-log-title">COMBAT</div>
+        <div class="combat-log" id="combat-log"></div>
+      </div>
+    </div>
+
+    <!-- Player Frame -->
+    <div class="player-frame" id="player-frame">
+      <div class="player-portrait" id="player-portrait">?</div>
+      <div class="player-frame-bars">
+        <div class="frame-name" id="combat-player-name">Hero</div>
+        <div class="bar-row">
+          <div class="bar-bg"><div class="hp-bar" id="player-hp-bar" style="width:100%"></div></div>
+          <span class="bar-text" id="player-hp-text">5000 / 5000</span>
+        </div>
+        <div class="bar-row">
+          <div class="bar-bg"><div class="resource-bar" id="player-resource-bar" style="width:100%"></div></div>
+          <span class="bar-text" id="player-resource-text">100 / 100</span>
+        </div>
+      </div>
+      <div class="player-buffs" id="player-buffs"></div>
+    </div>
+
+    <!-- Ability Bar -->
+    <div class="ability-bar" id="ability-bar">
+      <div class="gcd-overlay-bar">
+        <div class="gcd-fill" id="gcd-fill" style="width:0%"></div>
+      </div>
+      <div class="abilities-row" id="abilities-row"></div>
+      <div class="combat-info-strip" id="combat-info-strip"></div>
+    </div>
+
+    <button class="btn-flee" id="btn-flee">⚠ FLEE</button>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: LOOT ═══ -->
+<div id="screen-loot" class="screen">
+  <div class="loot-container">
+    <div class="loot-header">
+      <div class="loot-verdict" id="loot-verdict">VICTORY!</div>
+      <div class="loot-boss" id="loot-boss-name"></div>
+      <div class="loot-xp" id="loot-xp-text"></div>
+    </div>
+    <div class="loot-items-label">ITEMS DROPPED</div>
+    <div class="loot-grid" id="loot-grid"></div>
+    <div class="loot-actions">
+      <button class="btn-primary" id="btn-take-all">TAKE ALL</button>
+      <button class="btn-secondary" id="btn-leave-loot">LEAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOOLTIP ═══ -->
+<div id="rc-tooltip" class="rc-tooltip hidden"></div>
+
+<!-- ═══ NOTIFICATION ═══ -->
+<div id="rc-notification" class="rc-notification hidden"></div>
+
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
