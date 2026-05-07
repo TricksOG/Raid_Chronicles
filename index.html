@@ -6,7 +6,7 @@
 <title>Raid Chronicles</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
@@ -36,6 +36,7 @@
       <h2 class="screen-title">CHOOSE YOUR PATH</h2>
       <p class="screen-subtitle">One hero. Three roles. An eternal war.</p>
       <div class="class-cards" id="class-cards"></div>
+      <div class="ability-preview" id="ability-preview"></div>
       <div class="name-section">
         <div class="name-label">YOUR NAME, CHAMPION</div>
         <input type="text" id="char-name-input" class="name-input" placeholder="Enter your name..." maxlength="20" autocomplete="off">
@@ -103,8 +104,15 @@
 <div id="screen-combat" class="screen">
   <div class="combat-layout">
 
+    <!-- Floating combat text layer -->
+    <div id="float-layer" class="float-layer"></div>
+
     <!-- Boss Frame -->
     <div class="boss-frame">
+      <div class="boss-portrait-wrap">
+        <div class="boss-portrait" id="boss-portrait">👹</div>
+        <div class="boss-portrait-ring"></div>
+      </div>
       <div class="boss-info">
         <div class="boss-name-tag" id="boss-name">—</div>
         <div class="boss-level-tag" id="boss-level-tag">Level ??</div>
@@ -182,9 +190,9 @@
 <!-- ═══ NOTIFICATION ═══ -->
 <div id="rc-notification" class="rc-notification hidden"></div>
 
-<script src="data.js"></script>
-<script src="engine.js"></script>
-<script src="ui.js"></script>
-<script src="main.js"></script>
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>
