@@ -536,23 +536,69 @@ RC.UI = (() => {
     const container = document.getElementById('companion-frames');
     if (!container) return;
     const c = RC.Engine.state.combat;
+    const char = RC.Engine.state.character;
+    const isHealer = RC.DATA.classes[char.classId].role === 'healer';
     container.innerHTML = '';
+
+    // Add "SELF" target button for healers
+    if (isHealer) {
+      const selfEl = document.createElement('div');
+      selfEl.className = 'companion-frame target-self';
+      selfEl.id = 'comp-frame-player';
+      selfEl.title = 'Heal yourself';
+      selfEl.innerHTML = `
+        <div class="comp-role-tag" style="color:#daa520">SELF</div>
+        <div class="comp-name">✦ ${char.name}</div>
+        <div class="comp-bar"><div class="comp-hp-fill" id="comp-hp-player" style="width:100%"></div></div>
+        <div class="comp-status" id="comp-status-player">You</div>
+        ${isHealer ? '<div class="heal-target-indicator" id="ht-player">▶ TARGET</div>' : ''}
+      `;
+      selfEl.addEventListener('click', () => {
+        if (!isHealer) return;
+        RC.Engine.setHealTarget('player');
+        updateHealTargetUI('player');
+      });
+      container.appendChild(selfEl);
+    }
+
+    const roleColors = { tank: '#4a6fa5', dps: '#8a2be2', dps2: '#8a2be2', healer: '#daa520' };
 
     Object.values(c.companions).forEach(comp => {
       const el = document.createElement('div');
       el.className = 'companion-frame';
+      if (isHealer) el.classList.add('healable');
       el.id = `comp-frame-${comp.role}`;
 
-      const roleColors = { tank: '#4a6fa5', dps: '#8a2be2', healer: '#daa520' };
       el.innerHTML = `
-        <div class="comp-role-tag" style="color:${roleColors[comp.role]}">${comp.role.toUpperCase()}</div>
+        <div class="comp-role-tag" style="color:${roleColors[comp.role] || '#888'}">${comp.role.toUpperCase()}</div>
         <div class="comp-name">${comp.icon} ${comp.name}</div>
         <div class="comp-bar"><div class="comp-hp-fill" id="comp-hp-${comp.role}" style="width:100%"></div></div>
         <div class="comp-status" id="comp-status-${comp.role}">${comp.status}</div>
         <div class="comp-action" id="comp-action-${comp.role}"></div>
+        ${isHealer ? `<div class="heal-target-indicator" id="ht-${comp.role}"></div>` : ''}
       `;
+
+      if (isHealer) {
+        el.addEventListener('click', () => {
+          RC.Engine.setHealTarget(comp.role);
+          updateHealTargetUI(comp.role);
+        });
+      }
+
       container.appendChild(el);
     });
+
+    // Set initial heal target indicator
+    updateHealTargetUI(c.healTarget || 'tank');
+  }
+
+  function updateHealTargetUI(targetId) {
+    document.querySelectorAll('.heal-target-indicator').forEach(el => el.textContent = '');
+    document.querySelectorAll('.companion-frame').forEach(el => el.classList.remove('heal-targeted'));
+    const indicator = document.getElementById(`ht-${targetId}`);
+    if (indicator) indicator.textContent = '▶ TARGET';
+    const frame = document.getElementById(`comp-frame-${targetId}`);
+    if (frame) frame.classList.add('heal-targeted');
   }
 
   function renderAbilityBar(cls) {
@@ -715,7 +761,17 @@ RC.UI = (() => {
       }
     });
 
-    // ── Companions ──
+    // ── Companions + self frame ──
+    // Update self HP frame (for healer)
+    const selfHP = document.getElementById('comp-hp-player');
+    if (selfHP) {
+      const pct = player.maxHP > 0 ? (player.currentHP / player.maxHP) * 100 : 0;
+      selfHP.style.width = pct.toFixed(1) + '%';
+      if (pct < 25) selfHP.style.background = '#aa1010';
+      else if (pct < 50) selfHP.style.background = '#aa8800';
+      else selfHP.style.background = '';
+    }
+
     Object.values(c.companions).forEach(comp => {
       const hpFill = document.getElementById(`comp-hp-${comp.role}`);
       const statusEl = document.getElementById(`comp-status-${comp.role}`);
@@ -735,11 +791,12 @@ RC.UI = (() => {
     // ── Combat Log ──
     const logEl = document.getElementById('combat-log');
     if (logEl && c.log.length > 0) {
-      logEl.innerHTML = c.log.slice(0, 60).map(entry => {
+      logEl.innerHTML = c.log.slice(0, 80).map(entry => {
         const typeClass = {
           dmg: 'log-dmg', heal: 'log-heal', dot: 'log-dot',
           ability: 'log-ability', boss: 'log-boss', system: 'log-system',
-          crit: 'log-crit'
+          crit: 'log-crit', 'companion-dmg': 'log-companion-dmg',
+          'companion-heal': 'log-companion-heal'
         }[entry.type] || '';
         return `<div class="log-entry ${typeClass}"><span class="log-time">[${entry.time}]</span>${entry.msg}</div>`;
       }).join('');

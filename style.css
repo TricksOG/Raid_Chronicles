@@ -1083,3 +1083,30 @@ body {
 /* ══════════════ LOG COLORS ══════════════ */
 .log-companion-dmg  { color: #8888cc; }
 .log-companion-heal { color: #55aa77; }
+
+/* ══════════════ HEALER TARGET SELECTION ══════════════ */
+.companion-frame.healable {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.companion-frame.healable:hover {
+  border-color: #44aa66 !important;
+  background: rgba(34,100,60,0.12);
+}
+.companion-frame.heal-targeted {
+  border-color: #22ee55 !important;
+  background: rgba(34,200,80,0.08);
+  box-shadow: 0 0 10px rgba(34,200,80,0.2);
+}
+.heal-target-indicator {
+  font-family: var(--font-title);
+  font-size: 0.55rem;
+  color: #22ee55;
+  letter-spacing: 2px;
+  text-align: right;
+  padding-top: 2px;
+  min-height: 12px;
+}
+.target-self {
+  border-style: dashed !important;
+}

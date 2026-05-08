@@ -181,6 +181,7 @@ RC.Engine = (() => {
       active: true,
       elapsed: 0,
       log: [],
+      healTarget: "tank", // which companion the healer is focused on; "player" = self
 
       boss: {
         id: bossId,
@@ -850,14 +851,9 @@ RC.Engine = (() => {
 
     if (ability.type === "heal") {
       const amt = calcHealAmount(ability.baseheal || 0, ability.hpScale || 0);
-      let target = "player";
-      // If healer, prioritize tank companion if low
-      const tank = c.companions["tank"];
-      if (ability.preferLowHP && tank && tank.currentHP / tank.maxHP < 0.5) {
-        tank.currentHP = Math.min(tank.maxHP, tank.currentHP + amt);
-        addLog(`${ability.name}: ${amt} on ${tank.name}`, "heal");
-      } else if (ability.bounces) {
-        // Chain heal
+
+      if (ability.bounces) {
+        // Chain heal — hits heal target first, then bounces
         const targets = getHealTargets(ability.bounces + 1);
         targets.forEach(t => {
           const healAmt = Math.floor(amt * (0.5 + 0.5 * Math.random()));
@@ -868,11 +864,23 @@ RC.Engine = (() => {
           }
         });
         addLog(`${ability.name}: ${amt} bouncing heal`, "heal");
+        player.totalHealDone += amt;
       } else {
-        player.currentHP = Math.min(player.maxHP, player.currentHP + amt);
-        addLog(`${ability.name}: ${amt}`, "heal");
+        // Direct heal — goes to selected heal target
+        const healTarget = c.healTarget || "player";
+        const targetComp = healTarget !== "player" ? c.companions[healTarget] : null;
+
+        if (targetComp && targetComp.currentHP > 0) {
+          const actual = Math.min(targetComp.maxHP - targetComp.currentHP, amt);
+          targetComp.currentHP += actual;
+          addLog(`${ability.name}: ${actual} on ${targetComp.name}`, "heal");
+          player.totalHealDone += actual;
+        } else {
+          player.currentHP = Math.min(player.maxHP, player.currentHP + amt);
+          addLog(`${ability.name}: ${amt}`, "heal");
+          player.totalHealDone += amt;
+        }
       }
-      player.totalHealDone += amt;
     }
 
     if (ability.type === "hot") {
@@ -1180,19 +1188,25 @@ RC.Engine = (() => {
     const charRole = RC.DATA.classes[state.character.classId].role;
     const loot = [];
 
-    // Filter drops appropriate for this class role
+    // Split drops into gear and potions
+    const potionDropIds = drops.filter(id => RC.DATA.potions.find(p => p.id === id));
+    const gearDropIds = drops.filter(id => !potionDropIds.includes(id));
+
+    // Filter gear appropriate for this class role
     const eligible = RC.DATA.items.filter(item =>
-      drops.includes(item.id) &&
+      gearDropIds.includes(item.id) &&
       (item.roles.includes(charRole) || item.roles.includes("all"))
     );
-
-    // Always get some drops
-    const available = eligible.length > 0 ? eligible : RC.DATA.items.filter(i => drops.includes(i.id));
+    const available = eligible.length > 0 ? eligible : RC.DATA.items.filter(i => gearDropIds.includes(i.id));
     const shuffled = available.sort(() => Math.random() - 0.5);
-    const count = Math.min(numDrops || 2, shuffled.length);
+    const gearCount = Math.min(Math.max((numDrops || 2) - 1, 1), shuffled.length);
+    for (let i = 0; i < gearCount; i++) loot.push({ ...shuffled[i] });
 
-    for (let i = 0; i < count; i++) {
-      loot.push({ ...shuffled[i] });
+    // Always drop 1 random potion from the pool
+    if (potionDropIds.length > 0) {
+      const potId = potionDropIds[Math.floor(Math.random() * potionDropIds.length)];
+      const potData = RC.DATA.potions.find(p => p.id === potId);
+      if (potData) loot.push({ ...potData, isPotion: true, quantity: Math.floor(Math.random() * 2) + 1 });
     }
 
     // Bonus: small chance for materials drop
@@ -1212,10 +1226,20 @@ RC.Engine = (() => {
       char.materials[item.id] = (char.materials[item.id] || 0) + (item.quantity || 1);
       return;
     }
+    if (item.isPotion) {
+      // Stack potions in inventory (up to 5 of each)
+      const existing = char.inventory.find(i => i && i.id === item.id && i.isPotion);
+      if (existing) {
+        existing.quantity = Math.min(5, (existing.quantity || 1) + (item.quantity || 1));
+      } else {
+        char.inventory.push({ ...item });
+      }
+      save();
+      return;
+    }
     // Check if better than equipped
     const currentEquipped = char.equipment[item.slot];
     if (!currentEquipped || item.ilvl > currentEquipped.ilvl) {
-      // Auto-equip if better
       if (currentEquipped) char.inventory.push(currentEquipped);
       char.equipment[item.slot] = item;
     } else {
@@ -1321,6 +1345,10 @@ RC.Engine = (() => {
   }
 
   // ═══════════════ FLEE ═══════════════
+  function setHealTarget(targetId) {
+    if (state.combat) state.combat.healTarget = targetId;
+  }
+
   function flee() {
     const c = state.combat;
     if (!c) return;
@@ -1393,7 +1421,7 @@ RC.Engine = (() => {
     createCharacter,
     recalcStats, getAverageIlvl,
     startCombat, startGameLoop, stopGameLoop,
-    useAbility, usePotion, flee,
+    useAbility, usePotion, setHealTarget, flee,
     processHoTs,
     takeItem, takeAllLoot, equipItem,
     updateQuestProgress,
