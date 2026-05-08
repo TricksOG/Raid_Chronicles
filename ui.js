@@ -61,19 +61,33 @@ RC.UI = (() => {
         const btn = document.getElementById('btn-begin');
         const name = document.getElementById('char-name-input').value.trim();
         if (btn) btn.disabled = !name;
-        renderAbilityPreview(cls);
+        // Store selected class for F1 toggle
+        RC.UI._previewClass = cls;
       });
 
       container.appendChild(card);
     });
+    injectF1Hint();
   }
 
   // ═══════════════ ABILITY PREVIEW ═══════════════
   function renderAbilityPreview(cls) {
     const panel = document.getElementById('ability-preview');
     if (!panel) return;
-    panel.classList.add('visible');
 
+    if (!cls) {
+      panel.classList.remove('visible');
+      return;
+    }
+
+    const isVisible = panel.classList.contains('visible') && RC.UI._lastPreviewClass === cls.id;
+    if (isVisible) {
+      panel.classList.remove('visible');
+      return;
+    }
+
+    RC.UI._lastPreviewClass = cls.id;
+    panel.classList.add('visible');
     panel.innerHTML = `
       <div class="ability-preview-header">— ${cls.name} Abilities —</div>
       <div class="ability-preview-grid" id="ap-grid"></div>
@@ -107,6 +121,19 @@ RC.UI = (() => {
       `;
       grid.appendChild(card);
     });
+  }
+
+  function injectF1Hint() {
+    // Add F1 hint below class cards if not already there
+    const existing = document.getElementById('f1-hint');
+    if (!existing) {
+      const hint = document.createElement('div');
+      hint.id = 'f1-hint';
+      hint.className = 'f1-hint';
+      hint.innerHTML = `<kbd>F1</kbd> — View Class Abilities`;
+      const preview = document.getElementById('ability-preview');
+      if (preview) preview.before(hint);
+    }
   }
 
   // ═══════════════ WORLD SCREEN ═══════════════
@@ -731,6 +758,15 @@ RC.UI = (() => {
         ${player.channeling ? `<div class="info-stat"><span class="info-stat-val" style="color:#ffd700">Channeling: ${player.channeling.name} (${player.channeling.remaining.toFixed(1)}s)</span></div>` : ''}
       `;
     }
+
+    // ── Damage meter (every 2s to avoid jank) ──
+    if (!RC.UI._meterTimer || c.elapsed - RC.UI._meterTimer > 2) {
+      RC.UI._meterTimer = c.elapsed;
+      renderDamageMeter();
+    }
+
+    // ── Potion slot ──
+    renderPotionSlot();
   }
 
   function calcCostFn(ability, player) {
@@ -902,23 +938,47 @@ RC.UI = (() => {
     return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
   }
 
-  // ═══════════════ FLOATING COMBAT TEXT ═══════════════
+  // ═══════════════ SCT + FLOATING TEXT ═══════════════
   let _lastLogLen = 0;
+  let _sctEntries = []; // track active SCT entries for push-apart effect
+
+  function spawnSCT(text, type) {
+    const stream = document.getElementById('sct-stream');
+    if (!stream) return;
+
+    const el = document.createElement('div');
+    el.className = `sct-entry sct-${type}`;
+    el.textContent = text;
+
+    // Stack entries: push existing ones up and spread horizontally
+    const existing = stream.querySelectorAll('.sct-entry');
+    const baseBottom = 5;
+    const spread = (Math.random() - 0.5) * 60; // left/right jitter px
+    el.style.bottom = `${baseBottom}%`;
+    el.style.left = '50%';
+    el.style.transform = `translateX(calc(-50% + ${spread}px))`;
+
+    // Push existing entries up to avoid overlap
+    existing.forEach((e, i) => {
+      const curBottom = parseFloat(e.style.bottom) || baseBottom;
+      e.style.bottom = `${curBottom + 12}%`;
+    });
+
+    stream.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
 
   function spawnFloatingText(text, type, xPct, yPct) {
+    // Keep overlay floats for boss area (phase transitions etc)
     const layer = document.getElementById('float-layer');
     if (!layer) return;
-
     const el = document.createElement('div');
     el.className = `float-text ${type}`;
     el.textContent = text;
-
-    // Randomize x slightly
-    const jitter = (Math.random() - 0.5) * 80;
+    const jitter = (Math.random() - 0.5) * 100;
     el.style.left = `calc(${xPct}% + ${jitter}px)`;
     el.style.top = `${yPct}%`;
     el.style.transform = 'translateX(-50%)';
-
     layer.appendChild(el);
     el.addEventListener('animationend', () => el.remove());
   }
@@ -929,42 +989,119 @@ RC.UI = (() => {
     _lastLogLen = log.length;
 
     newEntries.forEach(entry => {
-      // Parse numbers from log messages
       const numMatch = entry.msg.match(/[\d,]+/);
       const num = numMatch ? numMatch[0] : null;
 
-      if (entry.type === 'dmg' || entry.type === 'crit') {
-        // Player or companion damage — hits boss at top
-        if (num) spawnFloatingText(
-          (entry.type === 'crit' ? '💥 ' : '') + num,
-          entry.type === 'crit' ? 'dmg crit' : 'dmg',
-          50, 18
-        );
+      if (entry.type === 'dmg') {
+        if (num) spawnSCT(num, 'dmg');
+      } else if (entry.type === 'crit') {
+        if (num) spawnSCT('💥 ' + num + '!', 'crit');
       } else if (entry.type === 'dot') {
-        if (num) spawnFloatingText(num, 'dot', 50, 18);
+        if (num) spawnSCT(num, 'dmg');
       } else if (entry.type === 'heal') {
-        if (num) spawnFloatingText(
-          (entry.type === 'crit' ? '✦ ' : '+') + num,
-          entry.msg.includes('CRIT') ? 'heal crit' : 'heal',
-          50, 72
-        );
+        const isCrit = entry.msg.includes('CRIT');
+        if (num) spawnSCT((isCrit ? '✦ ' : '+') + num, isCrit ? 'healcrit' : 'heal');
       } else if (entry.type === 'boss') {
-        // Boss hits player — floats up from player area
-        if (num) spawnFloatingText(
-          num,
-          entry.msg.includes('CRIT') ? 'boss-dmg crit' : 'boss-dmg',
-          50, 75
-        );
+        // Boss hitting player — show in SCT as incoming damage
+        if (num) spawnSCT('-' + num, 'takedmg');
       } else if (entry.type === 'system') {
+        // System messages stay as overlay floaters (phase transitions, warnings)
         spawnFloatingText(entry.msg.replace(/\[.*?\]\s*/,'').substring(0, 40), 'system', 50, 40);
       }
+      // companion-dmg and companion-heal go to log only, not SCT
     });
+  }
+
+  function renderDamageMeter() {
+    const c = RC.Engine.state.combat;
+    if (!c || c.elapsed < 1) return;
+    const rows = document.getElementById('meter-rows');
+    if (!rows) return;
+
+    const player = c.player;
+    const t = Math.max(1, c.elapsed);
+
+    // Build entries: player + all companions
+    const entries = [];
+    entries.push({
+      name: RC.Engine.state.character.name,
+      icon: RC.DATA.classes[RC.Engine.state.character.classId].icon,
+      dmg: player.totalDmgDone || 0,
+      heal: player.totalHealDone || 0,
+      color: '#f0c040'
+    });
+    Object.values(c.companions).forEach(comp => {
+      entries.push({
+        name: comp.name,
+        icon: comp.icon,
+        dmg: comp.totalDmgDone || 0,
+        heal: comp.totalHealDone || 0,
+        color: comp.role === 'healer' ? '#daa520' : comp.role === 'tank' ? '#4a6fa5' : '#8a2be2'
+      });
+    });
+
+    // Sort by damage + healing combined
+    entries.sort((a, b) => (b.dmg + b.heal) - (a.dmg + a.heal));
+    const maxVal = Math.max(...entries.map(e => e.dmg + e.heal), 1);
+
+    rows.innerHTML = entries.map(e => {
+      const total = e.dmg + e.heal;
+      const pct = Math.round((total / maxVal) * 100);
+      const dps = Math.floor(e.dmg / t);
+      const hps = Math.floor(e.heal / t);
+      const label = e.heal > e.dmg ? `${hps} HPS` : `${dps} DPS`;
+      return `
+        <div class="meter-row">
+          <div class="meter-bar-bg" style="width:${pct}%;background:${e.color}"></div>
+          <span class="meter-row-icon">${e.icon}</span>
+          <span class="meter-row-name">${e.name}</span>
+          <span class="meter-row-val">${label}</span>
+          <span class="meter-row-pct">${pct}%</span>
+        </div>`;
+    }).join('');
+  }
+
+  function renderPotionSlot() {
+    const char = RC.Engine.state.character;
+    const c = RC.Engine.state.combat;
+    const btn = document.getElementById('potion-slot-btn');
+    const icon = document.getElementById('potion-slot-icon');
+    const cdOverlay = document.getElementById('potion-cd-overlay');
+    if (!btn || !icon) return;
+
+    // Find first potion in inventory
+    const pot = char.inventory.find(i => i && RC.DATA.potions.find(p => p.id === i.id));
+    const potData = pot ? RC.DATA.potions.find(p => p.id === pot.id) : null;
+
+    if (potData) {
+      icon.textContent = potData.icon;
+      btn.title = `${potData.name}: ${potData.desc} (P)`;
+      btn.disabled = false;
+
+      // Check cooldown
+      const cdKey = `pot_cd_${potData.id}`;
+      const cd = c ? (c.player.cooldowns[cdKey] || 0) : 0;
+      if (cd > 0 && cdOverlay) {
+        cdOverlay.style.display = 'flex';
+        cdOverlay.textContent = cd.toFixed(0);
+        btn.disabled = true;
+      } else if (cdOverlay) {
+        cdOverlay.style.display = 'none';
+      }
+    } else {
+      icon.textContent = '✕';
+      btn.title = 'No potion equipped';
+      btn.disabled = true;
+      if (cdOverlay) cdOverlay.style.display = 'none';
+    }
   }
 
   function resetFloatingText() {
     _lastLogLen = 0;
     const layer = document.getElementById('float-layer');
     if (layer) layer.innerHTML = '';
+    const stream = document.getElementById('sct-stream');
+    if (stream) stream.innerHTML = '';
   }
 
   // ═══════════════ PUBLIC API ═══════════════
@@ -974,8 +1111,12 @@ RC.UI = (() => {
     openModal, closeAllModals,
     showCombatResult,
     addTooltip, showTooltip, hideTooltip,
-    notify, spawnFloatingText, resetFloatingText,
-    _selectedClass: null
+    notify, spawnFloatingText, spawnSCT, resetFloatingText,
+    renderAbilityPreview,
+    _selectedClass: null,
+    _previewClass: null,
+    _lastPreviewClass: null,
+    _meterTimer: 0
   };
 
 })();

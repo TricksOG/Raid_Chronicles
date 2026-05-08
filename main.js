@@ -15,6 +15,7 @@
     bindLootEvents();
     bindModalEvents();
     bindKeyboardEvents();
+    bindPotionSlot();
 
     RC.UI.renderMenu();
 
@@ -173,6 +174,14 @@
     document.addEventListener('keydown', (e) => {
       const screen = RC.Engine.state.screen;
 
+      // F1 — ability preview on char select
+      if (e.key === 'F1' && screen === 'char-create') {
+        e.preventDefault();
+        const cls = RC.UI._previewClass;
+        if (cls) RC.UI.renderAbilityPreview(cls);
+        return;
+      }
+
       // Ability bar keybinds during combat
       if (screen === 'combat') {
         const keybinds = ['1','2','3','4','5','6'];
@@ -180,6 +189,13 @@
         if (idx !== -1) {
           e.preventDefault();
           RC.Engine.useAbility(idx);
+        }
+        // P — use potion
+        if (e.key === 'p' || e.key === 'P') {
+          e.preventDefault();
+          const char = RC.Engine.state.character;
+          const pot = char.inventory.find(i => i && RC.DATA.potions.find(p => p.id === i.id));
+          if (pot) RC.Engine.usePotion(pot.id);
         }
       }
 
@@ -189,6 +205,14 @@
         if (e.key === 'b' || e.key === 'B') RC.UI.openModal('inventory');
         if (e.key === 'l' || e.key === 'L') RC.UI.openModal('quests');
       }
+    });
+  }
+
+  function bindPotionSlot() {
+    document.getElementById('potion-slot-btn')?.addEventListener('click', () => {
+      const char = RC.Engine.state.character;
+      const pot = char.inventory.find(i => i && RC.DATA.potions.find(p => p.id === i.id));
+      if (pot) RC.Engine.usePotion(pot.id);
     });
   }
 

@@ -6,7 +6,7 @@
 <title>Raid Chronicles</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
@@ -128,12 +128,22 @@
       </div>
     </div>
 
-    <!-- Middle: Companions + Log -->
+    <!-- Middle: Companions + Log + SCT -->
     <div class="combat-middle">
       <div class="companion-frames" id="companion-frames"></div>
       <div class="combat-log-wrap">
-        <div class="combat-log-title">COMBAT</div>
+        <div class="combat-log-title">COMBAT LOG</div>
         <div class="combat-log" id="combat-log"></div>
+      </div>
+      <div class="combat-right-col">
+        <div class="sct-panel">
+          <div class="sct-title">COMBAT TEXT</div>
+          <div class="sct-stream" id="sct-stream"></div>
+        </div>
+        <div class="meter-panel">
+          <div class="meter-title">DAMAGE · HEALING</div>
+          <div class="meter-rows" id="meter-rows"></div>
+        </div>
       </div>
     </div>
 
@@ -159,7 +169,16 @@
       <div class="gcd-overlay-bar">
         <div class="gcd-fill" id="gcd-fill" style="width:0%"></div>
       </div>
-      <div class="abilities-row" id="abilities-row"></div>
+      <div class="ability-bar-main">
+        <div class="abilities-row" id="abilities-row"></div>
+        <div class="potion-slot-wrap">
+          <button class="potion-slot" id="potion-slot-btn">
+            <span class="potion-slot-icon" id="potion-slot-icon">✕</span>
+            <div class="ability-cd-overlay" id="potion-cd-overlay" style="display:none"></div>
+          </button>
+          <div class="potion-keybind">P</div>
+        </div>
+      </div>
       <div class="combat-info-strip" id="combat-info-strip"></div>
     </div>
 
@@ -190,9 +209,9 @@
 <!-- ═══ NOTIFICATION ═══ -->
 <div id="rc-notification" class="rc-notification hidden"></div>
 
-<script src="data.js"></script>
-<script src="engine.js"></script>
-<script src="ui.js"></script>
-<script src="main.js"></script>
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>

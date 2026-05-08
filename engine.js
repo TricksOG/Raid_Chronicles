@@ -232,10 +232,14 @@ RC.Engine = (() => {
   }
 
   function buildCompanions(playerRole, bossData) {
-    const allRoles = ["tank", "dps", "healer"];
-    const needRoles = allRoles.filter(r => r !== playerRole);
+    // Party: Tank + DPS + DPS2 + Healer, player fills one slot
+    const allRoles = ["tank", "dps", "dps2", "healer"];
+    const needRoles = allRoles.filter(r => {
+      if (r === "dps2") return true; // always include second DPS
+      return r !== playerRole;
+    });
     const comps = {};
-    const scaleMult = bossData.stats.maxHP / 80000; // scale to boss difficulty
+    const scaleMult = bossData.stats.maxHP / 400000; // scale to new Gruntling baseline
 
     needRoles.forEach(role => {
       const archetype = RC.DATA.aiCompanions[role];
@@ -251,7 +255,9 @@ RC.Engine = (() => {
         buffs: [],
         status: "Fighting...",
         lastAction: "",
-        threat: role === "tank" ? 999999 : 0, // tank holds aggro by default; player must massively overtake
+        threat: role === "tank" ? 999999 : 0,
+        totalDmgDone: 0,
+        totalHealDone: 0,
         scaleMult,
         archetype
       };
@@ -669,13 +675,15 @@ RC.Engine = (() => {
       }
     }
 
-    if (comp.role === "dps") {
+    if (comp.role === "dps" || comp.role === "dps2") {
       // DPS AI: Deal damage to boss
       const dmgAmt = Math.floor(comp.archetype.dpsPerAction * (1 + comp.scaleMult * 0.4) * (0.85 + Math.random() * 0.3));
       boss.currentHP = Math.max(0, boss.currentHP - dmgAmt);
       comp.threat += Math.floor(dmgAmt * 0.5);
+      comp.totalDmgDone = (comp.totalDmgDone || 0) + dmgAmt;
       comp.lastAction = `Deals ${dmgAmt} damage`;
       comp.status = `DPS: ${Math.floor(dmgAmt / comp.actionInterval)}/s`;
+      addLog(`${comp.name} hits for ${dmgAmt}`, "companion-dmg");
     }
 
     if (comp.role === "healer") {
@@ -695,17 +703,21 @@ RC.Engine = (() => {
         // Player needs healing more urgently
         const actual = Math.min(player.maxHP - player.currentHP, healAmt);
         player.currentHP += actual;
+        comp.totalHealDone = (comp.totalHealDone || 0) + actual;
         comp.lastAction = `Healed you for ${actual}`;
         comp.status = `Healing party`;
         if (actual > 0) addLog(`${comp.name} heals you for ${actual}`, "heal");
       } else if (tankUrgent && tank && tank.currentHP > 0) {
         const actual = Math.min(tank.maxHP - tank.currentHP, healAmt);
         tank.currentHP += actual;
+        comp.totalHealDone = (comp.totalHealDone || 0) + actual;
         comp.lastAction = `Healed ${tank.name} for ${actual}`;
         comp.status = `Healing tank`;
+        addLog(`${comp.name} heals ${tank.name} for ${actual}`, "companion-heal");
       } else if (playerHPPct < 0.98) {
         const actual = Math.min(player.maxHP - player.currentHP, Math.floor(healAmt * 0.5));
         player.currentHP += actual;
+        comp.totalHealDone = (comp.totalHealDone || 0) + actual;
         comp.lastAction = `Topped you off: +${actual}`;
         comp.status = `Healing party`;
         if (actual > 0) addLog(`${comp.name} heals you for ${actual}`, "heal");
@@ -1317,6 +1329,63 @@ RC.Engine = (() => {
     setTimeout(() => RC.UI.showScreen("world"), 500);
   }
 
+  function usePotion(potionId) {
+    const c = state.combat;
+    const char = state.character;
+    if (!c || !c.active) return false;
+
+    const potion = RC.DATA.potions.find(p => p.id === potionId);
+    if (!potion) return false;
+
+    // Check cooldown
+    const cdKey = `pot_cd_${potionId}`;
+    if ((c.player.cooldowns[cdKey] || 0) > 0) {
+      addLog(`${potion.name} is on cooldown!`, "system");
+      return false;
+    }
+
+    // Check inventory
+    const invSlot = char.inventory.findIndex(i => i && i.id === potionId);
+    if (invSlot === -1) {
+      addLog(`You don't have ${potion.name}!`, "system");
+      return false;
+    }
+
+    const player = c.player;
+
+    // Restore HP
+    if (potion.restoreHPPct) {
+      const amt = Math.floor(player.maxHP * potion.restoreHPPct);
+      player.currentHP = Math.min(player.maxHP, player.currentHP + amt);
+      addLog(`${potion.icon} ${potion.name}: +${amt} HP`, "heal");
+    }
+    // Restore Mana
+    if (potion.restoreManaPct) {
+      const amt = Math.floor(player.maxResource * potion.restoreManaPct);
+      player.currentResource = Math.min(player.maxResource, player.currentResource + amt);
+      addLog(`${potion.icon} ${potion.name}: +${amt} Mana`, "heal");
+    }
+    // Apply buff
+    if (potion.buffDuration) {
+      const buff = { id: potionId + "_buff", name: potion.name, icon: potion.icon,
+        remaining: potion.buffDuration, duration: potion.buffDuration,
+        buffHP: potion.buffHP, buffMP5: potion.buffMP5,
+        buffDmgPct: potion.buffDmgPct, buffDmgReduce: potion.buffDmgReduce };
+      player.buffs = player.buffs.filter(b => b.id !== buff.id);
+      player.buffs.push(buff);
+    }
+
+    // Set cooldown (shared 60s potion cooldown)
+    RC.DATA.potions.forEach(p => {
+      c.player.cooldowns[`pot_cd_${p.id}`] = potion.cooldown || 60;
+    });
+
+    // Remove one from inventory
+    char.inventory.splice(invSlot, 1);
+    addLog(`Used ${potion.name}!`, "system");
+    return true;
+  }
+
   // ═══════════════ PUBLIC API ═══════════════
   return {
     get state() { return state; },
@@ -1324,7 +1393,7 @@ RC.Engine = (() => {
     createCharacter,
     recalcStats, getAverageIlvl,
     startCombat, startGameLoop, stopGameLoop,
-    useAbility, flee,
+    useAbility, usePotion, flee,
     processHoTs,
     takeItem, takeAllLoot, equipItem,
     updateQuestProgress,

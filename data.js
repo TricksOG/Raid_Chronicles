@@ -257,6 +257,34 @@ RC.DATA = {
   qualityBorder: ['border-grey','border-white','border-green','border-blue','border-purple','border-orange'],
   qualityName: ['Poor','Common','Uncommon','Rare','Epic','Legendary'],
 
+  // ═══════════════ POTIONS ═══════════════
+  potions: [
+    { id: \"pot_health_minor\", name: \"Minor Health Potion\", icon: \"🧪\", quality: 1,
+      desc: \"Restores 20% of max HP. Grants +10% max HP for 15s.\",
+      restoreHPPct: 0.20, buffHP: 0.10, buffDuration: 15, cooldown: 60,
+      tooltip: \"A rudimentary brew of regenerative herbs.\" },
+    { id: \"pot_mana_minor\", name: \"Minor Mana Potion\", icon: \"💙\", quality: 1,
+      desc: \"Restores 20% of max mana. Grants +20 MP5 for 15s.\",
+      restoreManaPct: 0.20, buffMP5: 20, buffDuration: 15, cooldown: 60,
+      tooltip: \"Distilled arcane residue. Tastes like static.\" },
+    { id: \"pot_health_major\", name: \"Major Health Potion\", icon: \"❤️\", quality: 2,
+      desc: \"Restores 35% of max HP. Grants +15% max HP for 20s.\",
+      restoreHPPct: 0.35, buffHP: 0.15, buffDuration: 20, cooldown: 60,
+      tooltip: \"A potent concoction drawn from ancient recipes.\" },
+    { id: \"pot_mana_major\", name: \"Major Mana Potion\", icon: \"🔵\", quality: 2,
+      desc: \"Restores 35% of max mana. Grants +40 MP5 for 20s.\",
+      restoreManaPct: 0.35, buffMP5: 40, buffDuration: 20, cooldown: 60,
+      tooltip: \"Compressed arcane energy in liquid form.\" },
+    { id: \"elixir_ferocity\", name: \"Elixir of Ferocity\", icon: \"🔥\", quality: 2,
+      desc: \"Restores 15% HP and mana. Increases all damage by 10% for 25s.\",
+      restoreHPPct: 0.15, restoreManaPct: 0.15, buffDmgPct: 0.10, buffDuration: 25, cooldown: 60,
+      tooltip: \"The rage of a dying star, bottled for your convenience.\" },
+    { id: \"elixir_fortitude\", name: \"Elixir of Fortitude\", icon: \"💛\", quality: 3,
+      desc: \"Restores 25% HP. Reduces damage taken by 15% for 30s. Removes one debuff.\",
+      restoreHPPct: 0.25, buffDmgReduce: 0.15, bufFcleanse: true, buffDuration: 30, cooldown: 60,
+      tooltip: \"Forged from the essence of those who refused to fall.\" },
+  ],
+
   items: [
     // ── GRUNTLING DROPS (ilvl 12–18) ──
     { id: "i001", name: "Gruntling's Pauldrons",    icon: "🛡", slot: "shoulders", ilvl: 14, quality: 2, roles: ["tank"],
@@ -349,7 +377,7 @@ RC.DATA = {
       numDrops: 3,
       xp: 500,
       stats: {
-        maxHP: 80000, armor: 6000,
+        maxHP: 400000, armor: 6000,
         autoAttackDmg: 800, autoAttackSpeed: 2.5,
         abilities: [
           { id: "cleave", name: "Cleave", icon: "⚔", timer: 8, cooldown: 8,
@@ -377,7 +405,7 @@ RC.DATA = {
       numDrops: 3,
       xp: 1200,
       stats: {
-        maxHP: 200000, armor: 9500,
+        maxHP: 1000000, armor: 9500,
         autoAttackDmg: 1600, autoAttackSpeed: 2.2,
         abilities: [
           { id: "cannon_barrage", name: "Cannon Barrage", icon: "💣", timer: 10, cooldown: 10,
@@ -411,7 +439,7 @@ RC.DATA = {
       numDrops: 3,
       xp: 3000,
       stats: {
-        maxHP: 450000, armor: 12000,
+        maxHP: 2500000, armor: 12000,
         autoAttackDmg: 2800, autoAttackSpeed: 2.0,
         abilities: [
           { id: "void_pulse", name: "Void Pulse", icon: "🌀", timer: 8, cooldown: 8,
@@ -445,7 +473,7 @@ RC.DATA = {
       numDrops: 4,
       xp: 8000,
       stats: {
-        maxHP: 1200000, armor: 16000,
+        maxHP: 6000000, armor: 16000,
         autoAttackDmg: 5000, autoAttackSpeed: 1.8,
         abilities: [
           { id: "oblivion_beam", name: "Oblivion Beam", icon: "☄", timer: 8, cooldown: 8,
@@ -674,6 +702,15 @@ RC.DATA = {
       baseHP: 6000,
       actionInterval: 1.8,
       dpsPerAction: 1200
+    },
+    dps2: {
+      name: "Kira",
+      title: "the Deadeye",
+      icon: "🏹",
+      color: "role-dps",
+      baseHP: 5500,
+      actionInterval: 2.0,
+      dpsPerAction: 1100
     },
     healer: {
       name: "Lyria",
