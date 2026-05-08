@@ -662,27 +662,27 @@ RC.DATA = {
       title: "the Stoneguard",
       icon: "🛡",
       color: "role-tank",
-      baseHP: 8000,
+      baseHP: 18000,
       actionInterval: 1.5,
-      threatPerAction: 500
+      threatPerAction: 2000
     },
     dps: {
       name: "Vex",
       title: "the Voidreaver",
       icon: "◈",
       color: "role-dps",
-      baseHP: 3500,
+      baseHP: 6000,
       actionInterval: 1.8,
-      dpsPerAction: 800
+      dpsPerAction: 1200
     },
     healer: {
       name: "Lyria",
       title: "the Dawnbringer",
       icon: "✦",
       color: "role-healer",
-      baseHP: 4000,
-      actionInterval: 2.0,
-      healPerAction: 600
+      baseHP: 6000,
+      actionInterval: 1.8,
+      healPerAction: 1200
     }
   }
 

@@ -251,7 +251,7 @@ RC.Engine = (() => {
         buffs: [],
         status: "Fighting...",
         lastAction: "",
-        threat: role === "tank" ? 5000 : 0, // tank starts with threat lead
+        threat: role === "tank" ? 999999 : 0, // tank holds aggro by default; player must massively overtake
         scaleMult,
         archetype
       };
@@ -345,7 +345,7 @@ RC.Engine = (() => {
       player.manaRegenTimer = (player.manaRegenTimer || 0) + dt;
       if (player.manaRegenTimer >= 2) {
         player.manaRegenTimer -= 2;
-        const mp5perTick = (state.character.stats.mp5 || 30) * 2 / 5;
+        const mp5perTick = (state.character.stats.mp5 || 80) * 2 / 5;
         player.currentResource = Math.min(player.maxResource, player.currentResource + mp5perTick);
       }
     }
@@ -455,13 +455,17 @@ RC.Engine = (() => {
     const boss = c.boss;
     const player = c.player;
 
-    // Determine target: if tank companion exists and has more threat, boss attacks tank
+    // Determine target: tank companion holds aggro unless player is WAY ahead in threat
     const tank = c.companions["tank"];
     const playerRole = RC.DATA.classes[state.character.classId].role;
 
     let targetIsPlayer = true;
-    if (tank && tank.currentHP > 0) {
-      targetIsPlayer = player.threat > tank.threat;
+    if (playerRole === "tank") {
+      // Player IS the tank — boss always attacks player
+      targetIsPlayer = true;
+    } else if (tank && tank.currentHP > 0) {
+      // Tank companion holds aggro unless player has 3x more threat (pulled aggro)
+      targetIsPlayer = player.threat > tank.threat * 3;
     }
 
     let dmg = boss.autoAttackDmg;
@@ -564,17 +568,35 @@ RC.Engine = (() => {
         c.player.gcdRemaining = Math.max(c.player.gcdRemaining, ability.stunDur);
       }
 
-      // Deal damage to player (some abilities hit companions too)
+      // Deal damage — directed attacks hit tank companion if player is not the tank
       const playerRole = RC.DATA.classes[state.character.classId].role;
-      const mitigated = playerRole === "tank" ? Math.floor(dmg * (1 - (state.character.stats.armorDR || 0))) : dmg;
-      applyDamageToPlayer(mitigated, ability.type, "boss-ability");
-      addLog(`${ability.name} hits you for ${mitigated}!`, "boss");
+      const tankComp = c.companions["tank"];
+      const directedHitsTank = playerRole !== "tank" && tankComp && tankComp.currentHP > 0
+        && ability.id !== "void_corruption" && ability.id !== "oblivion_mark"; // some mechanics target non-tanks
+
+      if (directedHitsTank) {
+        const tankMitigated = Math.floor(dmg * 0.55); // tank companion has armor
+        tankComp.currentHP = Math.max(0, tankComp.currentHP - tankMitigated);
+        tankComp.lastAction = `Tanked ${ability.name}: -${tankMitigated}`;
+        addLog(`${ability.name} hits ${tankComp.name} for ${tankMitigated}!`, "boss");
+      } else {
+        const mitigated = playerRole === "tank" ? Math.floor(dmg * (1 - (state.character.stats.armorDR || 0))) : dmg;
+        applyDamageToPlayer(mitigated, ability.type, "boss-ability");
+        addLog(`${ability.name} hits you for ${mitigated}!`, "boss");
+      }
 
       // Also hits companions for some abilities (cleave-type)
       if (ability.id === "cleave" || ability.id === "reality_fracture") {
+        // Cleave hits player too — but reduced if not the tank
+        const splashPct = playerRole === "tank" ? 0 : 0.15; // healers/DPS only get 15% splash
+        if (splashPct > 0) {
+          const splashDmg = Math.floor(dmg * splashPct);
+          applyDamageToPlayer(splashDmg, ability.type, "boss-ability");
+          if (splashDmg > 0) addLog(`${ability.name} splashes you for ${splashDmg}`, "boss");
+        }
         Object.values(c.companions).forEach(comp => {
           if (comp.currentHP > 0) {
-            const compDmg = Math.floor(dmg * 0.5);
+            const compDmg = Math.floor(dmg * (comp.role === "tank" ? 0.5 : 0.15));
             comp.currentHP = Math.max(0, comp.currentHP - compDmg);
           }
         });
@@ -640,9 +662,9 @@ RC.Engine = (() => {
       comp.threat += threat;
       comp.lastAction = `Holds aggro (+${threat} threat)`;
       comp.status = `Tanking ${boss.name}`;
-      // Self-heal a little each action to stay up
-      if (comp.currentHP / comp.maxHP < 0.7) {
-        const selfHeal = Math.floor(comp.maxHP * 0.03);
+      // Self-heal to stay up — tanks are sturdy
+      if (comp.currentHP / comp.maxHP < 0.85) {
+        const selfHeal = Math.floor(comp.maxHP * 0.06);
         comp.currentHP = Math.min(comp.maxHP, comp.currentHP + selfHeal);
       }
     }
@@ -657,19 +679,34 @@ RC.Engine = (() => {
     }
 
     if (comp.role === "healer") {
-      // Healer AI: Prioritize tank, then player
       const healAmt = Math.floor(comp.archetype.healPerAction * (1 + comp.scaleMult * 0.4) * (0.9 + Math.random() * 0.2));
       const tank = c.companions["tank"];
+      const playerRole = RC.DATA.classes[state.character.classId].role;
 
-      if (tank && tank.currentHP > 0 && tank.currentHP / tank.maxHP < 0.9) {
+      const tankHPPct = tank && tank.currentHP > 0 ? tank.currentHP / tank.maxHP : 1;
+      const playerHPPct = player.currentHP / player.maxHP;
+
+      // If player is the healer, they are squishy — heal them more urgently
+      const playerHealThreshold = playerRole === "healer" ? 0.85 : 0.70;
+      const playerUrgent = playerHPPct < playerHealThreshold;
+      const tankUrgent = tankHPPct < 0.80;
+
+      if (playerUrgent && (!tankUrgent || playerHPPct < tankHPPct)) {
+        // Player needs healing more urgently
+        const actual = Math.min(player.maxHP - player.currentHP, healAmt);
+        player.currentHP += actual;
+        comp.lastAction = `Healed you for ${actual}`;
+        comp.status = `Healing party`;
+        if (actual > 0) addLog(`${comp.name} heals you for ${actual}`, "heal");
+      } else if (tankUrgent && tank && tank.currentHP > 0) {
         const actual = Math.min(tank.maxHP - tank.currentHP, healAmt);
         tank.currentHP += actual;
         comp.lastAction = `Healed ${tank.name} for ${actual}`;
         comp.status = `Healing tank`;
-      } else if (player.currentHP / player.maxHP < 0.8) {
-        const actual = Math.min(player.maxHP - player.currentHP, Math.floor(healAmt * 0.6));
+      } else if (playerHPPct < 0.98) {
+        const actual = Math.min(player.maxHP - player.currentHP, Math.floor(healAmt * 0.5));
         player.currentHP += actual;
-        comp.lastAction = `Healed you for ${actual}`;
+        comp.lastAction = `Topped you off: +${actual}`;
         comp.status = `Healing party`;
         if (actual > 0) addLog(`${comp.name} heals you for ${actual}`, "heal");
       } else {

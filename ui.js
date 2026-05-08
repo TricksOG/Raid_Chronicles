@@ -61,9 +61,51 @@ RC.UI = (() => {
         const btn = document.getElementById('btn-begin');
         const name = document.getElementById('char-name-input').value.trim();
         if (btn) btn.disabled = !name;
+        renderAbilityPreview(cls);
       });
 
       container.appendChild(card);
+    });
+  }
+
+  // ═══════════════ ABILITY PREVIEW ═══════════════
+  function renderAbilityPreview(cls) {
+    const panel = document.getElementById('ability-preview');
+    if (!panel) return;
+    panel.classList.add('visible');
+
+    panel.innerHTML = `
+      <div class="ability-preview-header">— ${cls.name} Abilities —</div>
+      <div class="ability-preview-grid" id="ap-grid"></div>
+    `;
+    const grid = panel.querySelector('#ap-grid');
+
+    cls.abilities.forEach(ab => {
+      const isOffGcd = !ab.gcd;
+      const hasCd = ab.cooldown > 0;
+      const costLabel = ab.cost > 0
+        ? `${ab.cost}${ab.costType === 'mana_pct' ? '% Mana' : ' Rage'}`
+        : 'Free';
+      const cdLabel = hasCd ? `${ab.cooldown}s CD` : null;
+
+      const card = document.createElement('div');
+      card.className = 'ability-card';
+      card.innerHTML = `
+        ${isOffGcd ? '<div class="ability-card-off-gcd-bar"></div>' : ''}
+        <div class="ability-card-icon" style="color:${ab.color}">${ab.icon}</div>
+        <div class="ability-card-body">
+          <div class="ability-card-name" style="color:${ab.color}">${ab.name}</div>
+          <div class="ability-card-tags">
+            <span class="ability-tag">${costLabel}</span>
+            ${cdLabel ? `<span class="ability-tag has-cd">${cdLabel}</span>` : ''}
+            ${isOffGcd ? '<span class="ability-tag off-gcd">Off GCD</span>' : ''}
+            <span class="ability-tag">${(ab.type || 'active').replace(/_/g,' ')}</span>
+          </div>
+          <div class="ability-card-desc">${ab.desc}</div>
+          ${ab.tooltip ? `<div class="ability-card-flavor">${ab.tooltip}</div>` : ''}
+        </div>
+      `;
+      grid.appendChild(card);
     });
   }
 
@@ -430,9 +472,18 @@ RC.UI = (() => {
     const char = RC.Engine.state.character;
     const cls = RC.DATA.classes[char.classId];
 
-    // Boss name
+    // Boss name + portrait
     document.getElementById('boss-name').textContent = c.boss.name;
     document.getElementById('boss-level-tag').textContent = 'Level 73 Elite';
+    const portraitEl = document.getElementById('boss-portrait');
+    if (portraitEl) {
+      const bossData = RC.DATA.bosses.find(b => b.id === c.bossId || b.name === c.boss.name);
+      portraitEl.textContent = bossData ? bossData.icon : '👿';
+      portraitEl.classList.remove('phase2');
+    }
+
+    // Reset floating text tracker
+    resetFloatingText();
 
     // Player portrait & name
     document.getElementById('player-portrait').textContent = cls.icon;
@@ -550,8 +601,15 @@ RC.UI = (() => {
     if (bossHPBar) bossHPBar.style.width = (bossHPPct * 100).toFixed(1) + '%';
     if (bossHPText) bossHPText.textContent = `${boss.currentHP.toLocaleString()} / ${boss.maxHP.toLocaleString()}`;
 
+    // Boss portrait phase styling
+    const portrait = document.getElementById('boss-portrait');
+    if (portrait) portrait.classList.toggle('phase2', c.phase >= 2);
+
     // Boss debuffs
     renderBuffRow('boss-debuffs', boss.debuffs, true);
+
+    // ── Floating combat text ──
+    processNewLogEntries(c.log);
 
     // ── Player HP / Resource ──
     const hpPct = player.currentHP / player.maxHP;
@@ -844,6 +902,71 @@ RC.UI = (() => {
     return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
   }
 
+  // ═══════════════ FLOATING COMBAT TEXT ═══════════════
+  let _lastLogLen = 0;
+
+  function spawnFloatingText(text, type, xPct, yPct) {
+    const layer = document.getElementById('float-layer');
+    if (!layer) return;
+
+    const el = document.createElement('div');
+    el.className = `float-text ${type}`;
+    el.textContent = text;
+
+    // Randomize x slightly
+    const jitter = (Math.random() - 0.5) * 80;
+    el.style.left = `calc(${xPct}% + ${jitter}px)`;
+    el.style.top = `${yPct}%`;
+    el.style.transform = 'translateX(-50%)';
+
+    layer.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+
+  function processNewLogEntries(log) {
+    if (log.length <= _lastLogLen) return;
+    const newEntries = log.slice(_lastLogLen);
+    _lastLogLen = log.length;
+
+    newEntries.forEach(entry => {
+      // Parse numbers from log messages
+      const numMatch = entry.msg.match(/[\d,]+/);
+      const num = numMatch ? numMatch[0] : null;
+
+      if (entry.type === 'dmg' || entry.type === 'crit') {
+        // Player or companion damage — hits boss at top
+        if (num) spawnFloatingText(
+          (entry.type === 'crit' ? '💥 ' : '') + num,
+          entry.type === 'crit' ? 'dmg crit' : 'dmg',
+          50, 18
+        );
+      } else if (entry.type === 'dot') {
+        if (num) spawnFloatingText(num, 'dot', 50, 18);
+      } else if (entry.type === 'heal') {
+        if (num) spawnFloatingText(
+          (entry.type === 'crit' ? '✦ ' : '+') + num,
+          entry.msg.includes('CRIT') ? 'heal crit' : 'heal',
+          50, 72
+        );
+      } else if (entry.type === 'boss') {
+        // Boss hits player — floats up from player area
+        if (num) spawnFloatingText(
+          num,
+          entry.msg.includes('CRIT') ? 'boss-dmg crit' : 'boss-dmg',
+          50, 75
+        );
+      } else if (entry.type === 'system') {
+        spawnFloatingText(entry.msg.replace(/\[.*?\]\s*/,'').substring(0, 40), 'system', 50, 40);
+      }
+    });
+  }
+
+  function resetFloatingText() {
+    _lastLogLen = 0;
+    const layer = document.getElementById('float-layer');
+    if (layer) layer.innerHTML = '';
+  }
+
   // ═══════════════ PUBLIC API ═══════════════
   return {
     showScreen, renderMenu, renderClassCards, renderWorld,
@@ -851,7 +974,7 @@ RC.UI = (() => {
     openModal, closeAllModals,
     showCombatResult,
     addTooltip, showTooltip, hideTooltip,
-    notify,
+    notify, spawnFloatingText, resetFloatingText,
     _selectedClass: null
   };
 
